@@ -64,6 +64,8 @@ def parse_element(element):
     lines = text.split("\n")
     name = lines[0]
     content = lines[1]
+    if len(content) <= 1:
+        return None
     if name == "Enviaste":
         return None
     if "Mensagem original" in content:
