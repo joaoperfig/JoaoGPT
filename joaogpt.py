@@ -5,6 +5,12 @@ import time
 from IPython import embed
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+import random
+import openai
+
+with open("secrets.txt", "r") as f:
+    key = f.read().strip()
+openai.api_key = key
 
 def send_safe_keys(target, text):
     lines = text.split("\n")
@@ -24,12 +30,15 @@ def send_gpt(message, driver, chatgpt):
     time.sleep(0.5)
     return
 
-def get_gpt(driver, chatgpt):
-    driver.switch_to.window(chatgpt)
-    conversation = driver.find_element(By.XPATH, '//*[@id="__next"]/div[1]/div[1]/main/div[1]/div/div/div')
-    elements = conversation.find_elements(By.XPATH, "*")
-    reply = elements[-2].text
-    return reply
+def send_gpt(gpt_chatlog):
+    print("Sending log to gpt")
+    completion = openai.ChatCompletion.create(
+      model="gpt-3.5-turbo",
+      messages=gpt_chatlog
+    )
+    print("Got gpt response.")
+    summary = completion["choices"][0]["message"]["content"]
+    return summary
 
 def send_messenger(message, driver, messenger):
     driver.switch_to.window(messenger)
@@ -38,16 +47,30 @@ def send_messenger(message, driver, messenger):
     input_box.send_keys(Keys.RETURN)
     return
 
+def send_gif(descriprion, driver, messenger):
+    driver.switch_to.window(messenger)
+    gif_button = driver.find_element(By.XPATH, "//div[@aria-label='Escolher um GIF']")
+    gif_button.click()
+    time.sleep(0.5)
+    input_box = driver.switch_to.active_element
+    input_box.send_keys(descriprion)
+    time.sleep(4)
+    scroll_box = driver.find_element(By.XPATH, "//div[@class='xb57i2i x1q594ok x5lxg6s x78zum5 xdt5ytf x6ikm8r x1ja2u2z x1pq812k x1rohswg xfk6m8 x1yqm8si xjx87ck xx8ngbg xwo3gff x1n2onr6 x1oyok0e x1odjw0f x1e4zzel x2b8uid xh8yej3']")
+    gifs = scroll_box.find_elements(By.XPATH, "*")
+    gifs[0].click()
+    time.sleep(0.5)
+    return
+
 def get_messenger(driver, messenger):
     driver.switch_to.window(messenger)
-    conversation = driver.find_element(By.XPATH, "//div[@aria-label='Mensagens na conversa com o nome Danilo PIPO']")
+    #conversation = driver.find_element(By.XPATH, "//div[@aria-label='Mensagens na conversa com o nome TestGPT']")
+    #conversation = driver.find_element(By.XPATH, "//div[@aria-label='Mensagens na conversa com o nome E sobre Bob, Marley']")
     #conversation = driver.find_element(By.XPATH, "//div[@aria-label='Mensagens na conversa com o nome Server Minecraft']")
     #conversation = driver.find_element(By.XPATH, "//div[@aria-label='Mensagens na conversa com João e Pedro']")
-    #conversations = driver.find_elements(By.XPATH, "//div[@class='x1h91t0o xkh2ocl x78zum5 xdt5ytf x13a6bvl x193iq5w x1c4vz4f xcrg951']")
+    conversations = driver.find_elements(By.XPATH, "//div[@class='x1n2onr6']")
     #conversation = conversations[-1]
-    elements = conversation.find_elements(By.XPATH, "*")
+    elements = conversations[1].find_elements(By.XPATH, "*")
     messages = []
-    #embed()
     for element in elements:
         parsed = parse_element(element)
         if parsed != None:
@@ -81,18 +104,13 @@ def get_new_messages(chatlog, messages):
     #chatlog = chatlog[-500:]
     return new_messages, chatlog
 
-def make_message_input(messages):
-    string = ""
-    for message in messages:
-        name = message[0]
-        content = message[1]
-        if content == "Enter":
-            s = "[IMAGE FROM "+name+"]"
-        else:
-            s = "[MESSAGE FROM "+name+"]: "+content
-        string += s + "\n"
-    return string
-
+def make_message_input(message):
+    name = message[0]
+    content = message[1]
+    if content == "Enter":
+        return "[IMAGE FROM "+name+"]"
+    else:
+        return "[MESSAGE FROM "+name+"]: "+content
 
 
 # Main Function
@@ -118,8 +136,6 @@ if __name__ == '__main__':
         print("Tab title: " + driver.title)
         if "Messenger" in driver.title:
             messenger = tab
-        else:
-            chatgpt = tab
 
 
     print("Giving chatgpt identity...")
@@ -127,10 +143,11 @@ if __name__ == '__main__':
     with open("identity.txt", "r") as f:
         identity = f.read()
 
-    send_gpt(identity, driver, chatgpt)
-    time.sleep(10)
+    gpt_chatlog = [{"role": "system", "content": identity}]
+    #send_messenger("*som de boot do Windows XP", driver, messenger)
 
     print("Entering cycle")
+
 
     chatlog = []
 
@@ -140,27 +157,23 @@ if __name__ == '__main__':
         new_messages, chatlog = get_new_messages(chatlog, messages)
         if len(new_messages) > 0:
             print("Found new messages.")
-            input = make_message_input(new_messages[-10:])
-            print(input)
-            time.sleep(0.5)
-            print("Sending to GPT")
-            send_gpt(input, driver, chatgpt)
-            time.sleep(15)
-            response = get_gpt(driver, chatgpt)
+            for new_message in new_messages[-10:]:
+                formatted = make_message_input(new_message)
+                gpt_chatlog += [{"role": "user", "content": formatted}]
+                print(formatted)
+            response = send_gpt(gpt_chatlog)
+            gpt_chatlog += [{"role": "assistant", "content": response}]
             print("Got response:")
             print(response)
             if "REPLY" in response:
                 print("Sending to messenger")
                 send_messenger(response[9:], driver, messenger)
+            elif "IMAGE" in response:
+                print("Sending image")
+                send_gif(response[10:].split("]")[0], driver, messenger)
+            elif "GIF" in response:
+                print("Sending gif")
+                send_gif(response[8:].split("]")[0], driver, messenger)
 
 
-        time.sleep(10)
-
-
-
-
-
-    #send_messenger("message", driver, messenger)
-    get_messenger(driver, messenger)
-
-    #embed()
+        time.sleep(5)
